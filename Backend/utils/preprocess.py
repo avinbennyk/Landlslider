@@ -16,42 +16,48 @@ def initialize_gee():
         print("Error initializing Google Earth Engine:", e)
         raise e
 
-def get_lat_lon_from_location(location, api_key):
+def get_lat_lon_from_location(location: str):
     """
     Get the latitude and longitude of a location using OpenWeatherMap Geocoding API.
+    If the API fails, prompt the user to provide the latitude and longitude manually.
     """
-    geocoding_url = f"http://api.openweathermap.org/geo/1.0/direct"
+    geocoding_url = "http://api.openweathermap.org/geo/1.0/direct"
     params = {
         'q': location,
         'limit': 1,
-        'appid': api_key
+        'appid': OPENWEATHERMAP_API_KEY
     }
+
     try:
         response = requests.get(geocoding_url, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
 
-        if not data:
-            raise ValueError(f"Error: Location '{location}' not found.")
-
-        lat = data[0]['lat']
-        lon = data[0]['lon']
-        print(f"Location '{location}' found: Latitude={lat}, Longitude={lon}")
-        return lat, lon
+        if data:
+            lat = float(data[0]["lat"])
+            lon = float(data[0]["lon"])
+            print(f"Location '{location}' found: Latitude={lat}, Longitude={lon}")
+            return lat, lon
+        else:
+            raise ValueError(f"OpenWeatherMap: Location '{location}' not found.")
     except (requests.exceptions.RequestException, ValueError) as e:
         print(f"Error fetching lat/lon for location '{location}': {e}")
-        raise e
+        print("Unable to fetch latitude and longitude from the API.")
+        lat = float(input(f"Please enter the latitude for {location}: "))
+        lon = float(input(f"Please enter the longitude for {location}: "))
+        print(f"Manual input accepted: Latitude={lat}, Longitude={lon}")
+        return lat, lon
 
-def get_and_scale_precipitation(lat, lon, api_key, min_value=0, max_value=50):
+def get_and_scale_precipitation(lat, lon, min_value=0, max_value=50):
     """
     Fetch real-time precipitation data using Current Weather Data API
     and scale it to a range of 1 to 5.
     """
-    url = f"https://api.openweathermap.org/data/2.5/weather"
+    url = "https://api.openweathermap.org/data/2.5/weather"
     params = {
         'lat': lat,
         'lon': lon,
-        'appid': api_key,
+        'appid': OPENWEATHERMAP_API_KEY,
         'units': 'metric'
     }
     try:
@@ -76,6 +82,9 @@ def scale_to_model_range(value, min_value, max_value):
     elif value > max_value:
         value = max_value
     return round(1 + (value - min_value) * (5 - 1) / (max_value - min_value), 2)
+
+
+
 
 def compute_slope_aspect(lat, lon, radius=5000):
     """

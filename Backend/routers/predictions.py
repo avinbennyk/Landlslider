@@ -41,10 +41,10 @@ def predict_landslide(data: LocationInput):
         initialize_gee()
 
         # Step 2: Fetch latitude and longitude for the provided location
-        lat, lon = get_lat_lon_from_location(data.location, api_key="8c2a3c9245acd4626517a6d2d68d3ea8")
+        lat, lon = get_lat_lon_from_location(data.location)
 
         # Step 3: Gather real-time features
-        precipitation = get_and_scale_precipitation(lat, lon, api_key="8c2a3c9245acd4626517a6d2d68d3ea8")
+        precipitation = get_and_scale_precipitation(lat, lon)
         terrain = compute_slope_aspect(lat, lon)
         curvature = compute_curvature(lat, lon)
         elevation = compute_elevation(lat, lon)
