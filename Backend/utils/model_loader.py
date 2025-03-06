@@ -17,7 +17,6 @@ def predict(features):
         confidence = max(rf_model.predict_proba(features)[0])
 
         return {
-            "model": "Stacking Model",
             "prediction": "Landslide" if prediction == 1 else "No Landslide",
             "confidence": round(confidence, 2)
         }

@@ -8,7 +8,8 @@ from utils.preprocess import (
     compute_slope_aspect,
     compute_curvature,
     compute_elevation,
-    compute_ndvi_ndwi
+    compute_ndvi_ndwi,
+    get_weather_details  # Ensure this is correctly imported
 )
 from utils.model_loader import predict
 import logging
@@ -41,6 +42,7 @@ class PredictionOutput(BaseModel):
     model: str
     prediction: str
     confidence: float
+    weather_details: dict  # Including weather details in the output
 
 # Output schema for alerts
 class AlertOutput(BaseModel):
@@ -58,6 +60,8 @@ def predict_landslide(data: PredictionInput):
             lat, lon = get_lat_lon_from_location(data.location)
         elif data.latitude is not None and data.longitude is not None:
             lat, lon = data.latitude, data.longitude
+
+        weather_details = get_weather_details(lat, lon)  # Fetching weather details
 
         precipitation = get_and_scale_precipitation(lat, lon)
         terrain = compute_slope_aspect(lat, lon)
@@ -85,7 +89,12 @@ def predict_landslide(data: PredictionInput):
             alert_storage.append(alert_message)
             logging.info(f"Generated alert: {alert_message}")
 
-        return result
+        return {
+            'model': result['model'],
+            'prediction': result['prediction'],
+            'confidence': result['confidence'],
+            'weather_details': weather_details  # Adding weather details to the response
+        }
     except HTTPException as e:
         raise e
     except Exception as e:

@@ -1,5 +1,9 @@
 import requests
+import logging
 import ee
+
+# Setup basic logging
+logging.basicConfig(level=logging.INFO)
 
 # Replace with your Google Cloud project ID and OpenWeatherMap API key
 PROJECT_ID = "landslideproject-446620"
@@ -27,7 +31,6 @@ def get_lat_lon_from_location(location: str):
         'limit': 1,
         'appid': OPENWEATHERMAP_API_KEY
     }
-
     try:
         response = requests.get(geocoding_url, params=params, timeout=10)
         response.raise_for_status()
@@ -42,11 +45,7 @@ def get_lat_lon_from_location(location: str):
             raise ValueError(f"OpenWeatherMap: Location '{location}' not found.")
     except (requests.exceptions.RequestException, ValueError) as e:
         print(f"Error fetching lat/lon for location '{location}': {e}")
-        print("Unable to fetch latitude and longitude from the API.")
-        lat = float(input(f"Please enter the latitude for {location}: "))
-        lon = float(input(f"Please enter the longitude for {location}: "))
-        print(f"Manual input accepted: Latitude={lat}, Longitude={lon}")
-        return lat, lon
+        raise e
 
 def get_and_scale_precipitation(lat, lon, min_value=0, max_value=50):
     """
@@ -83,14 +82,11 @@ def scale_to_model_range(value, min_value, max_value):
         value = max_value
     return round(1 + (value - min_value) * (5 - 1) / (max_value - min_value), 2)
 
-
-
-
 def compute_slope_aspect(lat, lon, radius=5000):
     """
     Compute slope and aspect for the specified location and scale them to a range of 1 to 5.
     """
-    initialize_gee()  # Ensure GEE is initialized
+    initialize_gee()
     aoi = ee.Geometry.Point([lon, lat]).buffer(radius)
     elevation = ee.Image("USGS/SRTMGL1_003").clip(aoi)
     terrain = ee.Terrain.products(elevation)
@@ -120,7 +116,7 @@ def compute_curvature(lat, lon, radius=5000):
     """
     Compute curvature for the specified location and scale it to a range of 1 to 5.
     """
-    initialize_gee()  # Ensure GEE is initialized
+    initialize_gee()
     aoi = ee.Geometry.Point([lon, lat]).buffer(radius)
     elevation = ee.Image("USGS/SRTMGL1_003").clip(aoi)
     curvature = elevation.convolve(ee.Kernel.laplacian8())
@@ -138,7 +134,7 @@ def compute_elevation(lat, lon, radius=5000):
     """
     Compute elevation for the specified location and scale it to a range of 1 to 5.
     """
-    initialize_gee()  # Ensure GEE is initialized
+    initialize_gee()
     aoi = ee.Geometry.Point([lon, lat]).buffer(radius)
     elevation = ee.Image("USGS/SRTMGL1_003").clip(aoi)
     scaled_elevation = elevation.unitScale(0, 8848).multiply(4).add(1).reduceRegion(
@@ -154,13 +150,13 @@ def compute_ndvi_ndwi(lat, lon, radius=5000):
     """
     Compute NDVI and NDWI for the specified location and scale them to a range of 1 to 5.
     """
-    initialize_gee()  # Ensure GEE is initialized
+    initialize_gee()
     aoi = ee.Geometry.Point([lon, lat]).buffer(radius)
-    collection = ee.ImageCollection("COPERNICUS/S2_SR") \
-        .filterBounds(aoi) \
-        .sort("CLOUDY_PIXEL_PERCENTAGE") \
+    collection = ee.ImageCollection("COPERNICUS/S2_SR")\
+        .filterBounds(aoi)\
+        .sort("CLOUDY_PIXEL_PERCENTAGE")\
         .first()
-    
+
     ndvi = collection.normalizedDifference(['B8', 'B4']).rename('NDVI')
     ndwi = collection.normalizedDifference(['B8', 'B3']).rename('NDWI')
 
@@ -182,3 +178,42 @@ def compute_ndvi_ndwi(lat, lon, radius=5000):
         "scaled_ndvi": round(scaled_ndvi.getInfo(), 2),
         "scaled_ndwi": round(scaled_ndwi.getInfo(), 2)
     }
+
+import requests
+import logging
+
+# Setup basic logging
+logging.basicConfig(level=logging.INFO)
+
+OPENWEATHERMAP_API_KEY = "your_api_key_here"
+
+def get_weather_details(lat, lon):
+    """Fetch additional weather details using the OpenWeatherMap API."""
+    url = "https://api.openweathermap.org/data/2.5/onecall"
+    params = {
+        'lat': lat,
+        'lon': lon,
+        'appid': OPENWEATHERMAP_API_KEY,
+        'units': 'metric',
+        'exclude': 'minutely,hourly,daily,alerts'
+    }
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()  # This will raise an exception for non-200 status codes
+        data = response.json()
+        return {
+            'temperature': data['current']['temp'],
+            'humidity': data['current']['humidity'],
+            'wind_speed': data['current']['wind_speed'],
+            'rainfall': data['current'].get('rain', {}).get('1h', 0),
+            'air_quality': data['current'].get('aqi', 'Unknown'),  # Assuming AQI might be provided
+            'pressure': data['current']['pressure'],
+            'uv_index': data['current']['uvi'],
+            'visibility': data['current'].get('visibility', 10000)  # Default to 10 km if not provided
+        }
+    except requests.RequestException as e:
+        logging.error(f"Request to OpenWeatherMap API failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch weather data")
+    except KeyError as e:
+        logging.error(f"Missing expected weather data key: {e}")
+        raise HTTPException(status_code=500, detail="Incomplete weather data")
