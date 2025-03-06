@@ -185,35 +185,51 @@ import logging
 # Setup basic logging
 logging.basicConfig(level=logging.INFO)
 
-OPENWEATHERMAP_API_KEY = "your_api_key_here"
+def get_weather_and_air_quality_details(lat, lon):
+    """Fetch weather and air quality details using the OpenWeatherMap APIs."""
+    # API URLs
+    weather_url = "http://api.openweathermap.org/data/2.5/weather"
+    air_quality_url = "http://api.openweathermap.org/data/2.5/air_pollution"
+    
+    # API Key
+    appid = 'aba172d1834a8a8168fe4f911edfe037'  # Replace with your actual API key
 
-def get_weather_details(lat, lon):
-    """Fetch additional weather details using the OpenWeatherMap API."""
-    url = "https://api.openweathermap.org/data/2.5/onecall"
+    # Common parameters
     params = {
         'lat': lat,
         'lon': lon,
-        'appid': OPENWEATHERMAP_API_KEY,
-        'units': 'metric',
-        'exclude': 'minutely,hourly,daily,alerts'
+        'appid': appid,
+        'units': 'metric'
     }
+
+    # Initialize results dictionary
+    details = {}
+
+    # Fetch weather details
     try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()  # This will raise an exception for non-200 status codes
-        data = response.json()
-        return {
-            'temperature': data['current']['temp'],
-            'humidity': data['current']['humidity'],
-            'wind_speed': data['current']['wind_speed'],
-            'rainfall': data['current'].get('rain', {}).get('1h', 0),
-            'air_quality': data['current'].get('aqi', 'Unknown'),  # Assuming AQI might be provided
-            'pressure': data['current']['pressure'],
-            'uv_index': data['current']['uvi'],
-            'visibility': data['current'].get('visibility', 10000)  # Default to 10 km if not provided
-        }
+        weather_response = requests.get(weather_url, params=params)
+        weather_response.raise_for_status()
+        weather_data = weather_response.json()
+        details.update({
+            'temperature': weather_data['main']['temp'],
+            'humidity': weather_data['main']['humidity'],
+            'wind_speed': weather_data['wind']['speed'],
+            'pressure': weather_data['main']['pressure'],
+            'visibility': weather_data.get('visibility', 10000),  # Default to 10 km if not provided
+            'rainfall': weather_data.get('rain', {}).get('1h', 0)  # Rainfall in the last hour
+        })
     except requests.RequestException as e:
-        logging.error(f"Request to OpenWeatherMap API failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch weather data")
-    except KeyError as e:
-        logging.error(f"Missing expected weather data key: {e}")
-        raise HTTPException(status_code=500, detail="Incomplete weather data")
+        logging.error(f"Error fetching weather data: {e}")
+        details['weather_error'] = str(e)
+
+    # Fetch air quality details
+    try:
+        air_quality_response = requests.get(air_quality_url, params=params)
+        air_quality_response.raise_for_status()
+        air_quality_data = air_quality_response.json()
+        details['air_quality_index'] = air_quality_data['list'][0]['main']['aqi']
+    except requests.RequestException as e:
+        logging.error(f"Error fetching air quality data: {e}")
+        details['air_quality_error'] = str(e)
+
+    return details

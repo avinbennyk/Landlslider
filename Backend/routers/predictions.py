@@ -9,7 +9,7 @@ from utils.preprocess import (
     compute_curvature,
     compute_elevation,
     compute_ndvi_ndwi,
-    get_weather_details  # Ensure this is correctly imported
+    get_weather_and_air_quality_details  # Ensure this is correctly imported
 )
 from utils.model_loader import predict
 import logging
@@ -61,7 +61,7 @@ def predict_landslide(data: PredictionInput):
         elif data.latitude is not None and data.longitude is not None:
             lat, lon = data.latitude, data.longitude
 
-        weather_details = get_weather_details(lat, lon)  # Fetching weather details
+        weather_details =get_weather_and_air_quality_details(lat, lon)  # Fetching weather details
 
         precipitation = get_and_scale_precipitation(lat, lon)
         terrain = compute_slope_aspect(lat, lon)
