@@ -95,7 +95,6 @@ def predict_landslide(data: PredictionInput):
             logging.info(f"Generated alert: {alert_message}")
 
         return {
-            'model': result['model'],
             'prediction': result['prediction'],
             'confidence': result['confidence'],
             'weather_details': weather_details  # Adding weather details to the response
