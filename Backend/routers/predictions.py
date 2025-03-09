@@ -79,7 +79,12 @@ def predict_landslide(data: PredictionInput):
             vegetation['scaled_ndwi']
         ]
 
-        result = predict(features)
+         # Here is the proper place for your model prediction try-except block
+        try:
+            result = predict(features)
+        except Exception as e:
+            logging.error("Error during model prediction: %s", e)
+            raise HTTPException(status_code=500, detail="Model prediction failed")
 
         if result['prediction'] == "Landslide":
             alert_message = {
