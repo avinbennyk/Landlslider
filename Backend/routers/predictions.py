@@ -9,20 +9,25 @@ from utils.preprocess import (
     compute_curvature,
     compute_elevation,
     compute_ndvi_ndwi,
-    get_weather_and_air_quality_details  # Ensure this is correctly imported
+    get_weather_and_air_quality_details
 )
 from utils.model_loader import predict
+import pandas as pd
+import joblib
 import logging
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 
+# Load transformers
+poly_path = "/Users/avinbennyk/Desktop/Landslidepro/Transformers/poly_transformer.pkl"
+scaler_path = "/Users/avinbennyk/Desktop/Landslidepro/Transformers/scaler_transformer.pkl"
+
+poly_transformer = joblib.load(poly_path)
+scaler_transformer = joblib.load(scaler_path)
+
 router = APIRouter()
 
-# In-memory storage for alerts
-alert_storage = []
-
-# Input schema
 class PredictionInput(BaseModel):
     location: Optional[str] = None
     latitude: Optional[float] = None
@@ -37,17 +42,11 @@ class PredictionInput(BaseModel):
             raise ValueError("Both 'latitude' and 'longitude' must be provided if 'location' is not specified.")
         return v
 
-# Output schema for prediction
 class PredictionOutput(BaseModel):
     model: str
     prediction: str
     confidence: float
-    weather_details: dict  # Including weather details in the output
-
-# Output schema for alerts
-class AlertOutput(BaseModel):
-    message: str
-    location: str
+    weather_details: dict
 
 @router.post("/", response_model=PredictionOutput)
 def predict_landslide(data: PredictionInput):
@@ -61,7 +60,7 @@ def predict_landslide(data: PredictionInput):
         elif data.latitude is not None and data.longitude is not None:
             lat, lon = data.latitude, data.longitude
 
-        weather_details =get_weather_and_air_quality_details(lat, lon)  # Fetching weather details
+        weather_details = get_weather_and_air_quality_details(lat, lon)
 
         precipitation = get_and_scale_precipitation(lat, lon)
         terrain = compute_slope_aspect(lat, lon)
@@ -69,42 +68,34 @@ def predict_landslide(data: PredictionInput):
         elevation = compute_elevation(lat, lon)
         vegetation = compute_ndvi_ndwi(lat, lon)
 
-        features = [
-            precipitation,
-            terrain['scaled_slope'],
-            terrain['scaled_aspect'],
-            curvature,
-            elevation,
-            vegetation['scaled_ndvi'],
-            vegetation['scaled_ndwi']
-        ]
+        # Create feature dictionary
+        features_dict = {
+            'Slope': terrain['scaled_slope'],
+            'Aspect': terrain['scaled_aspect'],
+            'Curvature': curvature,
+            'Precipitation': precipitation,
+            'NDVI': vegetation['scaled_ndvi'],
+            'NDWI': vegetation['scaled_ndwi'],
+            'Elevation': elevation
+        }
 
-         # Here is the proper place for your model prediction try-except block
-        try:
-            result = predict(features)
-        except Exception as e:
-            logging.error("Error during model prediction: %s", e)
-            raise HTTPException(status_code=500, detail="Model prediction failed")
+        # Convert dictionary to DataFrame
+        feature_df = pd.DataFrame([features_dict])
 
-        if result['prediction'] == "Landslide":
-            alert_message = {
-                "message": f"Warning! A landslide is predicted for {data.location or f'Latitude: {lat}, Longitude: {lon}'}. Take immediate precaution.",
-                "location": data.location or f"Latitude: {lat}, Longitude: {lon}"
-            }
-            alert_storage.append(alert_message)
-            logging.info(f"Generated alert: {alert_message}")
+        # Apply polynomial transformation and scaling
+        feature_poly = poly_transformer.transform(feature_df)
+        feature_scaled = scaler_transformer.transform(feature_poly)
+
+        # Make a prediction using model_loader's predict function
+        result = predict(feature_scaled)
 
         return {
-            'prediction': result['prediction'],
-            'confidence': result['confidence'],
-            'weather_details': weather_details  # Adding weather details to the response
+            'model': "StackingClassifier",
+            'prediction': result["prediction"],  # Already formatted in model_loader
+            'confidence': result["confidence"],
+            'weather_details': weather_details
         }
-    except HTTPException as e:
-        raise e
+
     except Exception as e:
         logging.error(f"Error in processing prediction: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/alerts", response_model=list[AlertOutput])
-def get_alerts():
-    return alert_storage
