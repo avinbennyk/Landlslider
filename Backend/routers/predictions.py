@@ -15,6 +15,8 @@ from utils.model_loader import predict
 import pandas as pd
 import joblib
 import logging
+import pywhatkit as kit
+import time
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +29,12 @@ poly_transformer = joblib.load(poly_path)
 scaler_transformer = joblib.load(scaler_path)
 
 router = APIRouter()
+
+# Hardcoded phone numbers for alerts (Replace with actual WhatsApp numbers)
+RECEIVER_NUMBERS = [
+    "+919876543210",  # Example number (replace with real numbers)
+    "+918765432109"
+]
 
 class PredictionInput(BaseModel):
     location: Optional[str] = None
@@ -88,6 +96,29 @@ def predict_landslide(data: PredictionInput):
 
         # Make a prediction using model_loader's predict function
         result = predict(feature_scaled)
+
+        # Extract prediction result
+        landslide_prediction = result["prediction"]
+        confidence = result["confidence"]
+
+                # If a landslide is predicted, send an alert
+        if landslide_prediction.lower() == "landslide likely":
+            alert_message = f"🚨 Landslide Alert! 🚨\nLocation: {data.location or f'Lat: {lat}, Lon: {lon}'}\nConfidence: {confidence:.2f}%\nTake necessary precautions! Stay safe."
+
+            failed_numbers = []
+            for number in RECEIVER_NUMBERS:
+                try:
+                    hour = time.localtime().tm_hour
+                    minute = time.localtime().tm_min + 1  # Send in the next minute
+
+                    kit.sendwhatmsg(number, alert_message, hour, minute, wait_time=10, tab_close=True)
+                    logging.info(f"Alert sent to {number}")
+                except Exception as e:
+                    failed_numbers.append(number)
+                    logging.error(f"Failed to send alert to {number}: {str(e)}")
+
+            if failed_numbers:
+                logging.warning(f"Failed to send alerts to: {', '.join(failed_numbers)}")
 
         return {
             'model': "StackingClassifier",

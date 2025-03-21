@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import predictions, admin
+from routers import predictions
 
 app = FastAPI(
     title="GeoPredict Backend",
@@ -24,7 +24,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(predictions.router, prefix="/predictions", tags=["Predictions"])
-app.include_router(admin.router, prefix="/admin", tags=["Admin"])
 
 @app.get("/")
 def root():
