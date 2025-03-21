@@ -1,46 +1,42 @@
+import pywhatkit as kit
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import List
+import time
 
 router = APIRouter()
 
-# Define the model for the alert message
+# Hardcoded phone numbers (Replace with actual numbers in international format)
+RECEIVER_NUMBERS = [
+    "+919876543210",  # Example number (replace with real numbers)
+    "+918765432109"
+]
+
 class AlertMessage(BaseModel):
     message: str = Field(..., min_length=5, max_length=500, description="Alert message to be sent")
-    location: Optional[str] = Field(None, description="Location where the alert is applicable")
-
-# Define the model for retrieving alerts
-class StoredAlert(BaseModel):
-    message: str
-    location: Optional[str]
-
-# In-memory storage for the alert messages
-alert_storage: List[StoredAlert] = []
 
 @router.post("/alert", tags=["Admin"])
 async def send_alert(alert: AlertMessage):
     """
-    Endpoint to send alert messages to people.
+    Send a WhatsApp alert message using PyWhatKit.
     """
     if not alert.message.strip():
         raise HTTPException(status_code=400, detail="Alert message cannot be empty")
 
-    # Add the alert to the in-memory storage
-    new_alert = {"message": alert.message, "location": alert.location}
-    alert_storage.append(new_alert)
-    print(f"Alert sent: {alert.message} (Location: {alert.location})")  # Debug log
+    failed_numbers = []
+    for number in RECEIVER_NUMBERS:
+        try:
+            # Send message immediately (hour, minute must be at least 1 min in the future)
+            hour = time.localtime().tm_hour
+            minute = time.localtime().tm_min + 1  # Send in the next minute
 
-    return {
-        "status": "success",
-        "message": "Alert has been sent successfully",
-        "alert": new_alert
-    }
+            kit.sendwhatmsg(number, alert.message, hour, minute, wait_time=10, tab_close=True)
+            print(f"Alert sent to {number}")  # Debug log
+        except Exception as e:
+            failed_numbers.append(number)
+            print(f"Failed to send alert to {number}: {str(e)}")
 
-@router.get("/alerts", tags=["Admin"], response_model=List[StoredAlert])
-async def get_all_alerts():
-    """
-    Endpoint to retrieve all sent alerts.
-    """
-    if not alert_storage:
-        return {"message": "No alerts available at the moment"}
-    return alert_storage
+    if failed_numbers:
+        raise HTTPException(status_code=500, detail=f"Failed to send alerts to: {', '.join(failed_numbers)}")
+
+    return {"status": "success", "message": "Alerts sent successfully"}
