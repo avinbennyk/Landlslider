@@ -32,8 +32,7 @@ router = APIRouter()
 
 # Hardcoded phone numbers for alerts (Replace with actual WhatsApp numbers)
 RECEIVER_NUMBERS = [
-    "+919876543210",  # Example number (replace with real numbers)
-    "+918765432109"
+    "+918714493211",  # Example number (replace with real numbers)
 ]
 
 class PredictionInput(BaseModel):
@@ -102,7 +101,7 @@ def predict_landslide(data: PredictionInput):
         confidence = result["confidence"]
 
                 # If a landslide is predicted, send an alert
-        if landslide_prediction.lower() == "landslide likely":
+        if landslide_prediction.lower() == "landslide":
             alert_message = f"🚨 Landslide Alert! 🚨\nLocation: {data.location or f'Lat: {lat}, Lon: {lon}'}\nConfidence: {confidence:.2f}%\nTake necessary precautions! Stay safe."
 
             failed_numbers = []
